@@ -2,7 +2,7 @@ import asyncio
 import json
 import os
 from contextlib import asynccontextmanager
-from typing import List
+from typing import List, Optional
 
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
 from fastapi.responses import HTMLResponse
