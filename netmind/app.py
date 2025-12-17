@@ -120,6 +120,19 @@ async def get_dashboard(request: Request):
         "proxies": state_manager.active_proxies.values()
     })
 
+@app.post("/api/proxies")
+async def create_proxy(local_port: int, target_host: str, target_port: int, name: str, protocol: str = "raw"):
+    try:
+        msg = await engine.add_proxy(local_port, target_host, target_port, name, protocol)
+        return {"status": "ok", "message": msg}
+    except Exception as e:
+        return {"status": "error", "error": str(e)}
+
+@app.get("/api/history")
+async def get_history(limit: int = 10):
+    history = list(state_manager.packet_log)[-limit:]
+    return [h.__dict__ for h in history]
+
 @app.websocket("/ws/monitor")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
