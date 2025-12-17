@@ -129,9 +129,12 @@ async def create_proxy(local_port: int, target_host: str, target_port: int, name
         return {"status": "error", "error": str(e)}
 
 @app.get("/api/history")
-async def get_history(limit: int = 10):
-    history = list(state_manager.packet_log)[-limit:]
-    return [h.__dict__ for h in history]
+async def get_history(limit: int = 10, proxy_name: Optional[str] = None):
+    """Get the most recent packets seen by the system, optionally filtered by proxy name."""
+    history = list(state_manager.packet_log)
+    if proxy_name:
+        history = [h for h in history if h.proxy_name == proxy_name]
+    return [h.__dict__ for h in history[-limit:]]
 
 @app.websocket("/ws/monitor")
 async def websocket_endpoint(websocket: WebSocket):
