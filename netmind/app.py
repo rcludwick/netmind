@@ -1,3 +1,10 @@
+"""
+NetMind Application Server.
+
+This module defines the FastAPI application for NetMind, including API endpoints,
+MCP server integration, and WebSocket handlers for real-time monitoring.
+"""
+
 import asyncio
 import json
 import os
@@ -18,6 +25,15 @@ TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
 class ProxyRequest(BaseModel):
+    """Request model for creating a new TCP proxy.
+
+    Attributes:
+        local_port: The local port to listen on.
+        target_host: The target hostname or IP address.
+        target_port: The target port to forward traffic to.
+        name: A human-readable name for the proxy connection.
+        protocol: The protocol to use for parsing (default: "raw").
+    """
     local_port: int
     target_host: str
     target_port: int
@@ -25,11 +41,22 @@ class ProxyRequest(BaseModel):
     protocol: str = "raw"
 
 class TestConnectionRequest(BaseModel):
+    """Request model for testing a connection to a target.
+
+    Attributes:
+        target_host: The target hostname or IP address.
+        target_port: The target port to connect to.
+    """
     target_host: str
     target_port: int
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Manage application lifespan (startup and shutdown).
+
+    Args:
+        app: The FastAPI application instance.
+    """
     # Startup logic
     print("NetMind Initializing...")
     
@@ -63,9 +90,12 @@ mcp = FastMCP("NetMind Network Intelligence")
 
 @mcp.tool()
 def get_help() -> str:
-    """
-    Returns a comprehensive guide on how to use NetMind to debug network traffic.
+    """Returns a comprehensive guide on how to use NetMind to debug network traffic.
+
     Read this if you are unsure how to proceed.
+
+    Returns:
+        A formatted markdown string containing the user guide.
     """
     return """
 # NetMind User Guide for AI Agents
@@ -110,8 +140,7 @@ You are currently connected to **NetMind**, a network interception and analysis 
 
 @mcp.tool()
 async def start_proxy(local_port: int, target_host: str, target_port: int, name: str, protocol: str = "raw"):
-    """
-    Start a new TCP proxy.
+    """Start a new TCP proxy.
     
     Args:
         local_port: The port on localhost to listen on.
@@ -119,6 +148,9 @@ async def start_proxy(local_port: int, target_host: str, target_port: int, name:
         target_port: The destination port.
         name: A human-readable name for this connection.
         protocol: 'raw' for generic TCP, 'hamlib' for Radio control.
+
+    Returns:
+        A success message if the proxy started, or an error message string.
     """
     try:
         msg = await engine.add_proxy(local_port, target_host, target_port, name, protocol)
@@ -128,13 +160,24 @@ async def start_proxy(local_port: int, target_host: str, target_port: int, name:
 
 @mcp.tool()
 async def list_traffic_history(limit: int = 10) -> str:
-    """Get the most recent packets seen by the system."""
+    """Get the most recent packets seen by the system.
+
+    Args:
+        limit: The maximum number of packets to return.
+
+    Returns:
+        A JSON-formatted string containing the packet history.
+    """
     history = list(state_manager.packet_log)[-limit:]
     return json.dumps([h.__dict__ for h in history], indent=2)
 
 @mcp.resource("tcp://proxies/active")
 def list_active_proxies() -> str:
-    """Returns a list of currently active TCP proxies."""
+    """Returns a list of currently active TCP proxies.
+
+    Returns:
+        A JSON-formatted string listing active proxies.
+    """
     proxies = [
         {"name": p.name, "listen": p.local_port, "target": f"{p.target_host}:{p.target_port}", "proto": p.protocol}
         for p in state_manager.active_proxies.values()
@@ -150,12 +193,31 @@ app.mount("/mcp", mcp_app)
 
 @app.get("/", response_class=HTMLResponse)
 async def get_dashboard(request: Request):
+    """Render the NetMind dashboard.
+
+    Args:
+        request: The incoming HTTP request.
+
+    Returns:
+        The rendered HTML dashboard template.
+    """
     return templates.TemplateResponse(request, "dashboard.html", {
         "proxies": state_manager.active_proxies.values()
     })
 
 @app.post("/api/proxies")
 async def create_proxy(proxy: ProxyRequest):
+    """API endpoint to create a new proxy.
+
+    Args:
+        proxy: The proxy configuration.
+
+    Returns:
+        A JSON response indicating success.
+
+    Raises:
+        HTTPException: If the proxy fails to start.
+    """
     try:
         msg = await engine.add_proxy(
             proxy.local_port, 
@@ -170,7 +232,15 @@ async def create_proxy(proxy: ProxyRequest):
 
 @app.get("/api/history")
 async def get_history(limit: int = 10, proxy_name: Optional[str] = None):
-    """Get the most recent packets seen by the system, optionally filtered by proxy name."""
+    """Get the most recent packets seen by the system, optionally filtered by proxy name.
+
+    Args:
+        limit: Maximum number of packets to return.
+        proxy_name: Optional name of the proxy to filter by.
+
+    Returns:
+        A list of packet dictionaries.
+    """
     history = list(state_manager.packet_log)
     if proxy_name:
         history = [h for h in history if h.proxy_name == proxy_name]
@@ -178,6 +248,17 @@ async def get_history(limit: int = 10, proxy_name: Optional[str] = None):
 
 @app.delete("/api/proxies/{port}")
 async def remove_proxy(port: int):
+    """Remove a proxy by its local port.
+
+    Args:
+        port: The local port of the proxy to remove.
+
+    Returns:
+        A JSON response indicating success.
+
+    Raises:
+        HTTPException: If the proxy is not found or cannot be removed.
+    """
     try:
         msg = await engine.remove_proxy(port)
         return {"status": "success", "message": msg}
@@ -188,6 +269,14 @@ async def remove_proxy(port: int):
 
 @app.post("/api/proxies/test")
 async def test_connection(req: TestConnectionRequest):
+    """Test a connection to a target host and port.
+
+    Args:
+        req: The connection details to test.
+
+    Returns:
+        A JSON response indicating success or failure.
+    """
     try:
         _, writer = await asyncio.wait_for(
             asyncio.open_connection(req.target_host, req.target_port),
@@ -203,7 +292,11 @@ async def test_connection(req: TestConnectionRequest):
 
 @app.post("/api/shutdown")
 async def shutdown_server():
-    """Shuts down the NetMind server."""
+    """Shuts down the NetMind server.
+
+    Returns:
+        A JSON response indicating that shutdown has been initiated.
+    """
     # Schedule process exit
     loop = asyncio.get_running_loop()
     loop.call_later(0.1, os._exit, 0)
@@ -211,6 +304,11 @@ async def shutdown_server():
 
 @app.websocket("/ws/monitor")
 async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for real-time monitoring.
+
+    Args:
+        websocket: The WebSocket connection.
+    """
     await websocket.accept()
     queue = await state_manager.subscribe()
     try:
@@ -221,6 +319,7 @@ async def websocket_endpoint(websocket: WebSocket):
         state_manager.unsubscribe(queue)
 
 def main():
+    """Main entry point for running the NetMind server."""
     import argparse
     import uvicorn
 

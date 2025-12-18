@@ -1,9 +1,18 @@
+"""
+Protocol Parsers.
+
+This module provides parsers for interpreting network traffic content, specifically
+targeting Hamlib protocol messages for semantic display.
+"""
+
 import re
 from typing import Optional
 
 class HamlibParser:
-    """
-    Parses Hamlib 'rigctld' TCP protocol commands into human-readable descriptions.
+    """Parses Hamlib 'rigctld' TCP protocol commands into human-readable descriptions.
+    
+    This parser uses regex patterns to identify common Hamlib commands and responses,
+    translating them into semantic strings (e.g., "SET FREQ" instead of "F ...").
     """
     
     # Regex patterns for common Hamlib commands
@@ -27,9 +36,15 @@ class HamlibParser:
 
     @classmethod
     def decode(cls, data: bytes) -> str:
-        """
-        Decodes bytes into a semantic description if it matches Hamlib syntax.
-        Falls back to raw string representation.
+        """Decodes bytes into a semantic description if it matches Hamlib syntax.
+
+        Falls back to raw string representation if no pattern matches.
+
+        Args:
+            data: The raw byte data to decode.
+
+        Returns:
+            A string describing the packet content (e.g., "SET FREQ: 14000000" or "RAW: ...").
         """
         try:
             text = data.decode("utf-8").strip()
