@@ -201,6 +201,14 @@ async def test_connection(req: TestConnectionRequest):
         # but with status=error
         return {"status": "error", "message": f"Connection failed: {str(e)}"}
 
+@app.post("/api/shutdown")
+async def shutdown_server():
+    """Shuts down the NetMind server."""
+    # Schedule process exit
+    loop = asyncio.get_running_loop()
+    loop.call_later(0.1, os._exit, 0)
+    return {"status": "success", "message": "Server shutting down..."}
+
 @app.websocket("/ws/monitor")
 async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()

@@ -23,6 +23,7 @@
             </div>
             <div class="flex gap-2">
                 <span id="status" class="px-3 py-1 bg-red-900 text-red-200 rounded-full text-xs uppercase font-bold tracking-wider">Disconnected</span>
+                <button onclick="shutdownServer()" class="px-3 py-1 bg-red-700 hover:bg-red-600 text-white rounded text-xs font-bold uppercase tracking-wider ml-4">Quit</button>
             </div>
         </header>
 
@@ -223,6 +224,18 @@
             } catch (err) {
                 resultEl.innerText = "Error";
                 resultEl.className = "text-xs font-bold text-red-500";
+            }
+        }
+
+        async function shutdownServer() {
+            if (!confirm("Are you sure you want to shut down the NetMind server?")) return;
+            try {
+                await fetch('/api/shutdown', { method: 'POST' });
+                alert("Server is shutting down. You can close this tab.");
+                window.close();
+            } catch (err) {
+                console.error(err);
+                alert("Shutdown command sent.");
             }
         }
 
