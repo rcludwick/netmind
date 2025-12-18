@@ -32,6 +32,26 @@ class TestConnectionRequest(BaseModel):
 async def lifespan(app: FastAPI):
     # Startup logic
     print("NetMind Initializing...")
+    
+    # Initialize proxies from environment variable
+    if "NETMIND_PROXIES" in os.environ:
+        try:
+            proxies = json.loads(os.environ["NETMIND_PROXIES"])
+            for p in proxies:
+                try:
+                    await engine.add_proxy(
+                        int(p["local_port"]), 
+                        p["target_host"], 
+                        int(p["target_port"]), 
+                        p["name"], 
+                        p.get("protocol", "raw")
+                    )
+                    print(f"Started proxy: {p['name']}")
+                except Exception as e:
+                    print(f"Failed to start proxy {p.get('name')}: {e}")
+        except Exception as e:
+            print(f"Error loading proxies from env: {e}")
+
     await engine.start_monitor()
     yield
     # Shutdown logic
@@ -193,8 +213,39 @@ async def websocket_endpoint(websocket: WebSocket):
         state_manager.unsubscribe(queue)
 
 def main():
+    import argparse
     import uvicorn
-    uvicorn.run("netmind.app:app", host="0.0.0.0", port=8002, reload=True)
+
+    parser = argparse.ArgumentParser(description="NetMind Server")
+    parser.add_argument("--host", default="0.0.0.0", help="Host to bind to (default: 0.0.0.0)")
+    parser.add_argument("--port", type=int, default=8002, help="Port to bind to (default: 8002)")
+    parser.add_argument("--reload", action="store_true", help="Enable auto-reload")
+    parser.add_argument("--proxy", action="append", help="Start a proxy (format: name:local_port:target_host:target_port)")
+
+    args = parser.parse_args()
+
+    if args.proxy:
+        proxies = []
+        for proxy_str in args.proxy:
+            try:
+                # Expected format: name:local_port:target_host:target_port
+                parts = proxy_str.split(":")
+                if len(parts) >= 4:
+                    proxies.append({
+                        "name": parts[0],
+                        "local_port": parts[1],
+                        "target_host": parts[2],
+                        "target_port": parts[3]
+                    })
+                else:
+                    print(f"Invalid proxy format (ignored): {proxy_str}")
+            except Exception as e:
+                print(f"Error parsing proxy '{proxy_str}': {e}")
+        
+        if proxies:
+            os.environ["NETMIND_PROXIES"] = json.dumps(proxies)
+
+    uvicorn.run("netmind.app:app", host=args.host, port=args.port, reload=args.reload)
 
 if __name__ == "__main__":
     main()

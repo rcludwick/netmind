@@ -1,14 +1,76 @@
-NetMindNetMind is a dual-interface TCP debugging tool designed for AI agents and human operators. It serves as both a Model Context Protocol (MCP) server and a real-time web dashboard.It is specifically optimized for debugging Hamlib (Rig Control) applications by translating raw TCP packets into semantic descriptions (e.g., F 14074000 → SET FREQ: 14074000), but it works as a generic TCP proxy for any protocol.FeaturesTCP Proxy Engine: Spawns multiple listeners that forward traffic to target hosts.MCP Server: allows AI agents (like Claude Desktop, Cursor, etc.) to programmatically start proxies and inspect traffic history.Web Dashboard: Real-time WebSocket-based view of packets (TX/RX) with hex dumps and semantic translation.Hamlib Support: Built-in parser for radio control protocols.Repo-Ready: Built with uv for modern Python dependency management.🚀 Quick StartPrerequisitesPython 3.11+uv (recommended)Installation# 1. Clone the repository
-git clone [https://github.com/yourusername/netmind.git](https://github.com/yourusername/netmind.git)
-cd netmind
+# NetMind
 
-# 2. Install dependencies
-uv sync --all-extras
+**NetMind** is a dual-interface TCP debugging tool designed for AI agents and human operators. It serves as both a **Model Context Protocol (MCP)** server and a real-time **Web Dashboard**.
 
-# 3. Install Playwright browsers (for testing)
-uv run playwright install chromium
-Running the ServerStart the application (Web UI + MCP Adapter):uv run uvicorn netmind.app:app --host 0.0.0.0 --port 8000 --reload
-Web Dashboard: http://localhost:8000MCP SSE Endpoint: http://localhost:8000/mcp/sse## 🤖 MCP Integration for AI Agents
+It is specifically optimized for debugging Hamlib (Rig Control) applications by translating raw TCP packets into semantic descriptions (e.g., `F 14074000` → `SET FREQ: 14074000`), but it works as a robust generic TCP proxy for any protocol.
+
+## ✨ Features
+
+- **TCP Proxy Engine**: Spawns multiple listeners that forward traffic to target hosts.
+- **MCP Server**: Allows AI agents (like Claude Desktop, Cursor, etc.) to programmatically start proxies and inspect traffic history.
+- **Web Dashboard**: Real-time WebSocket-based view of packets (TX/RX) with hex dumps and semantic translation.
+- **Hamlib Support**: Built-in parser for radio control protocols.
+- **Repo-Ready**: Built with `uv` for modern Python dependency management.
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- Python 3.11+
+- [uv](https://github.com/astral-sh/uv) (recommended)
+
+### Installation
+
+1.  **Clone the repository:**
+    ```bash
+    git clone https://github.com/yourusername/netmind.git
+    cd netmind
+    ```
+
+2.  **Install dependencies:**
+    ```bash
+    uv sync --all-extras
+    ```
+
+3.  **Install Playwright browsers (for testing):**
+    ```bash
+    uv run playwright install chromium
+    ```
+
+### Running the Server
+
+Start the application (Web UI + MCP Adapter):
+
+```bash
+uv run netmind-server
+```
+
+- **Web Dashboard**: [http://localhost:8002](http://localhost:8002)
+- **MCP SSE Endpoint**: `http://localhost:8002/mcp/sse`
+
+## 💻 CLI Usage
+
+You can start the server with pre-configured proxies using the command line.
+
+### Start Multiple Proxies
+
+Use the `--proxy` flag to define one or more proxies at startup.
+Format: `name:local_port:target_host:target_port`
+
+```bash
+uv run netmind-server \
+  --proxy "RigControl:9000:192.168.1.50:4532" \
+  --proxy "WebServer:8080:localhost:80"
+```
+
+**Options:**
+
+- `--host`: Host to bind to (default: `0.0.0.0`)
+- `--port`: Port to bind to (default: `8002`)
+- `--reload`: Enable auto-reload for development
+- `--proxy`: Start a proxy (can be used multiple times)
+
+## 🤖 MCP Integration for AI Agents
 
 NetMind is designed to be a "tool" for other AI agents. It exposes a Model Context Protocol (MCP) server that provides programmatic access to network interception and analysis.
 
@@ -23,53 +85,43 @@ uv run -m netmind.mcp_stdio
 ```
 
 **2. SSE (Server-Sent Events)**
-If running the web server (`uv run uvicorn netmind.app:app ...`), the MCP endpoint is available at:
-- Endpoint: `http://localhost:8000/sse`
+If running the web server (`netmind-server`), the MCP endpoint is available at:
+- Endpoint: `http://localhost:8002/mcp/sse`
 
 ### 🛠️ Tools
 
 These tools allow the AI to manipulate the network proxy engine.
 
-#### `start_proxy`
-Starts a new TCP listener that intercepts and forwards traffic.
+- **`start_proxy`**: Starts a new TCP listener that intercepts and forwards traffic.
+    - `local_port`: Port NetMind listens on.
+    - `target_host`: Destination hostname.
+    - `target_port`: Destination port.
+    - `name`: Human-readable label.
+    - `protocol`: `"raw"` (default) or `"hamlib"`.
+- **`list_traffic_history`**: Retrieves recent network packets (TX/RX).
+- **`tcp://proxies/active`** (Resource): JSON list of active proxies.
 
-*   **Description**: Create a new proxy instance.
-*   **Arguments**:
-    *   `local_port` (int): The port NetMind will listen on (e.g., `9000`).
-    *   `target_host` (string): The destination hostname (e.g., `localhost` or `192.168.1.50`).
-    *   `target_port` (int): The destination port (e.g., `4532`).
-    *   `name` (string): A human-readable label for this connection (e.g., `"Kenwood TS-590"`).
-    *   `protocol` (string): Parsing mode. Options:
-        *   `"raw"`: No parsing (default).
-        *   `"hamlib"`: Decodes amateur radio control commands (Rig Control).
+## 🧪 Testing
 
-#### `list_traffic_history`
-Retrieves the most recent network packets captured by the proxies.
+NetMind uses Playwright for End-to-End (E2E) Network Validation.
 
-*   **Description**: Get a log of TX/RX events to analyze communication.
-*   **Arguments**:
-    *   `limit` (int, default=10): Number of recent packets to retrieve.
+```bash
+uv run pytest
+```
 
-### 📦 Resources
+### How to Write a Debug Test
 
-Resources provide read-only context about the system state.
+If you are debugging a specific Hamlib behavior, you can write a test case to mechanically reproduce network issues.
 
-*   `tcp://proxies/active`
-    *   **Description**: Returns a JSON list of all currently running proxy listeners and their configurations. Use this to check what ports are already occupied.
-
-### 🧠 System Prompt Context
-
-If you are an AI assistant using this tool, you can adopt the following persona:
-
-> "I have access to NetMind, a network interception tool. I can spin up TCP proxies to 'man-in-the-middle' connections between clients and servers. This allows me to see the exact raw bytes and decoded messages flowing between them, which is essential for debugging protocol errors, verifying data formats, or reverse-engineering network behavior. When debugging Hamlib/Rigctl, I should always use the 'hamlib' protocol to get semantic decoding."🧪 Testing with PlaywrightNetMind uses Playwright not just for UI testing, but for End-to-End (E2E) Network Validation.Because the web dashboard relies on WebSockets to display real-time TCP traffic, standard HTTP tests aren't enough. Our tests spawn the actual server, create real TCP connections, send bytes, and verify that the data appears in the browser DOM.Running the Suiteuv run pytest
-How to Write a Debug TestIf you are debugging a specific Hamlib behavior, you can write a test case in tests/test_custom.py. This allows you to mechanically reproduce network issues.import pytest
+```python
+import pytest
 from playwright.async_api import Page, expect
 from netmind.core import engine
 import asyncio
 
 @pytest.mark.asyncio
 async def test_radio_frequency_update(page: Page, server_url):
-    # 1. Setup: Start a proxy (assuming a dummy target is running on 4532)
+    # 1. Setup: Start a proxy
     await engine.add_proxy(9000, "127.0.0.1", 4532, "MyRadio", "hamlib")
     
     # 2. Open the Inspector
@@ -82,6 +134,14 @@ async def test_radio_frequency_update(page: Page, server_url):
     writer.close()
 
     # 4. Assertion: Verify the UI decoded it correctly
-    # We expect the dashboard to show the semantic meaning, not just raw text
     await expect(page.locator(".semantic")).to_contain_text("SET FREQ: 14200000")
-📻 Supported Hamlib CommandsThe src/netmind/protocols.py file currently supports:F: Set Frequencyf: Get FrequencyM: Set Modem: Get ModeT: PTT (Push to Talk)
+```
+
+## 📻 Supported Hamlib Commands
+
+The parser currently supports:
+- **F**: Set Frequency
+- **f**: Get Frequency
+- **M**: Set Mode
+- **m**: Get Mode
+- **T**: PTT (Push to Talk)
