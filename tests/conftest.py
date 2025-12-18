@@ -9,7 +9,7 @@ from netmind.app import app
 @pytest.fixture(scope="session")
 def server_url():
     """Starts the FastAPI server in a separate thread."""
-    port = 8000
+    port = 8002
     config = uvicorn.Config(app, host="127.0.0.1", port=port, log_level="error")
     server = uvicorn.Server(config)
     
@@ -23,33 +23,28 @@ def server_url():
 
 @pytest.fixture(scope="session")
 def echo_server():
-    """Starts a dummy TCP echo server in a separate thread."""
-    port = 9999
-    stop_event = threading.Event()
+    """Starts a threaded TCP echo server."""
+    import socketserver
+    
+    class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
+        allow_reuse_address = True
+        daemon_threads = True
 
-    def run_server():
-        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        sock.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-        sock.bind(('127.0.0.1', port))
-        sock.listen(1)
-        sock.settimeout(1.0) # Check stop_event periodically
-        
-        while not stop_event.is_set():
+    class EchoHandler(socketserver.BaseRequestHandler):
+        def handle(self):
             try:
-                conn, _ = sock.accept()
-                with conn:
-                    while True:
-                        data = conn.recv(1024)
-                        if not data:
-                            break
-                        conn.sendall(data)
-            except socket.timeout:
-                continue
+                while True:
+                    data = self.request.recv(1024)
+                    if not data:
+                        break
+                    self.request.sendall(data)
             except Exception:
-                break
-        sock.close()
+                pass
 
-    thread = threading.Thread(target=run_server)
+    port = 9999
+    server = ThreadedTCPServer(('127.0.0.1', port), EchoHandler)
+    
+    thread = threading.Thread(target=server.serve_forever)
     thread.daemon = True
     thread.start()
     
@@ -58,8 +53,8 @@ def echo_server():
     
     yield port
     
-    stop_event.set()
-    thread.join(timeout=2)
+    server.shutdown()
+    server.server_close()
 
 @pytest.fixture
 async def manual_page():
@@ -69,3 +64,15 @@ async def manual_page():
         page = await browser.new_page()
         yield page
         await browser.close()
+
+@pytest.fixture(autouse=True)
+async def cleanup_engine():
+    from netmind.core import engine, state_manager
+    # Run before test
+    yield
+    # Run after test
+    await engine.stop_all_proxies()
+    state_manager.packet_log.clear()
+    state_manager.subscribers.clear()
+    # Restart engine for next test if needed (shutdown clears proxies)
+

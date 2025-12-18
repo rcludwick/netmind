@@ -4,11 +4,12 @@ import os
 from contextlib import asynccontextmanager
 from typing import List, Optional
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, HTTPException
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from fastmcp import FastMCP
 from mcp.server.fastmcp import Context
+from pydantic import BaseModel
 
 from .core import engine, state_manager
 
@@ -16,13 +17,26 @@ from .core import engine, state_manager
 TEMPLATES_DIR = os.path.join(os.path.dirname(__file__), "templates")
 templates = Jinja2Templates(directory=TEMPLATES_DIR)
 
+class ProxyRequest(BaseModel):
+    local_port: int
+    target_host: str
+    target_port: int
+    name: str
+    protocol: str = "raw"
+
+class TestConnectionRequest(BaseModel):
+    target_host: str
+    target_port: int
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup logic
     print("NetMind Initializing...")
+    await engine.start_monitor()
     yield
     # Shutdown logic
     print("NetMind Shutting down...")
+    await engine.shutdown()
 
 # --- MCP Server Definition ---
 mcp = FastMCP("NetMind Network Intelligence")
@@ -121,12 +135,18 @@ async def get_dashboard(request: Request):
     })
 
 @app.post("/api/proxies")
-async def create_proxy(local_port: int, target_host: str, target_port: int, name: str, protocol: str = "raw"):
+async def create_proxy(proxy: ProxyRequest):
     try:
-        msg = await engine.add_proxy(local_port, target_host, target_port, name, protocol)
-        return {"status": "ok", "message": msg}
+        msg = await engine.add_proxy(
+            proxy.local_port, 
+            proxy.target_host, 
+            proxy.target_port, 
+            proxy.name, 
+            proxy.protocol
+        )
+        return {"status": "success", "message": msg}
     except Exception as e:
-        return {"status": "error", "error": str(e)}
+        raise HTTPException(status_code=400, detail=str(e))
 
 @app.get("/api/history")
 async def get_history(limit: int = 10, proxy_name: Optional[str] = None):
@@ -135,6 +155,31 @@ async def get_history(limit: int = 10, proxy_name: Optional[str] = None):
     if proxy_name:
         history = [h for h in history if h.proxy_name == proxy_name]
     return [h.__dict__ for h in history[-limit:]]
+
+@app.delete("/api/proxies/{port}")
+async def remove_proxy(port: int):
+    try:
+        msg = await engine.remove_proxy(port)
+        return {"status": "success", "message": msg}
+    except ValueError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/proxies/test")
+async def test_connection(req: TestConnectionRequest):
+    try:
+        _, writer = await asyncio.wait_for(
+            asyncio.open_connection(req.target_host, req.target_port),
+            timeout=3.0
+        )
+        writer.close()
+        await writer.wait_closed()
+        return {"status": "success", "message": "Connection successful"}
+    except Exception as e:
+        # We return 200 even on failure so frontend can display message easily, 
+        # but with status=error
+        return {"status": "error", "message": f"Connection failed: {str(e)}"}
 
 @app.websocket("/ws/monitor")
 async def websocket_endpoint(websocket: WebSocket):
@@ -147,6 +192,9 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         state_manager.unsubscribe(queue)
 
-if __name__ == "__main__":
+def main():
     import uvicorn
-    uvicorn.run("netmind.app:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("netmind.app:app", host="0.0.0.0", port=8002, reload=True)
+
+if __name__ == "__main__":
+    main()

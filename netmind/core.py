@@ -19,6 +19,14 @@ class PacketEvent:
     semantic: str
     timestamp: float
     connection_id: str
+    type: str = "packet"
+
+@dataclass
+class StatusEvent:
+    local_port: int
+    status: str  # "online", "offline"
+    error_msg: Optional[str]
+    type: str = "status"
 
 @dataclass
 class ProxyConfig:
@@ -27,6 +35,8 @@ class ProxyConfig:
     target_port: int
     name: str
     protocol: str = "raw"  # raw, hamlib
+    status: str = "unknown"
+    error_msg: Optional[str] = None
 
 class StateManager:
     """Singleton to manage application state and event broadcasting."""
@@ -65,10 +75,11 @@ class StateManager:
         self.packet_log.append(event)
         self.broadcast(event)
 
-    def broadcast(self, event: PacketEvent):
+    def broadcast(self, event):
+        data = asdict(event)
         for q in self.subscribers:
             try:
-                q.put_nowait(asdict(event))
+                q.put_nowait(data)
             except asyncio.QueueFull:
                 pass  # Drop packet if subscriber is too slow
 
@@ -96,7 +107,19 @@ class TCPProxy:
         logger.info(f"Proxy '{self.config.name}' listening on {self.config.local_port} -> {self.config.target_host}:{self.config.target_port}")
         
         # Keep serving in the background
-        asyncio.create_task(self.server.serve_forever())
+        self.serve_task = asyncio.create_task(self.server.serve_forever())
+
+    async def close(self):
+        if self.server:
+            self.server.close()
+            await self.server.wait_closed()
+        if hasattr(self, 'serve_task'):
+            self.serve_task.cancel()
+            try:
+                await self.serve_task
+            except asyncio.CancelledError:
+                pass
+        logger.info(f"Proxy '{self.config.name}' stopped")
 
     async def handle_client(self, client_reader, client_writer):
         conn_id = str(uuid.uuid4())[:8]
@@ -139,12 +162,100 @@ class TCPProxy:
 class ProxyEngine:
     def __init__(self):
         self.proxies: List[TCPProxy] = []
+        self._monitor_task = None
 
     async def add_proxy(self, local_port: int, target_host: str, target_port: int, name: str, protocol: str = "raw"):
         config = ProxyConfig(local_port, target_host, target_port, name, protocol)
         proxy = TCPProxy(config)
         await proxy.start()
         self.proxies.append(proxy)
+        # Trigger an immediate health check for this proxy (optional, or wait for loop)
         return f"Proxy '{name}' started on port {local_port}"
+
+    async def remove_proxy(self, local_port: int):
+        for proxy in self.proxies:
+            if proxy.config.local_port == local_port:
+                await proxy.close()
+                self.proxies.remove(proxy)
+                if local_port in state_manager.active_proxies:
+                    del state_manager.active_proxies[local_port]
+                return f"Proxy on port {local_port} stopped"
+        raise ValueError(f"No proxy found on port {local_port}")
+
+    async def stop_monitor(self):
+        if self._monitor_task:
+            self._monitor_task.cancel()
+            try:
+                await self._monitor_task
+            except asyncio.CancelledError:
+                pass
+            except RuntimeError:
+                # Task might be in another loop
+                pass
+            self._monitor_task = None
+
+    async def stop_all_proxies(self):
+        logger.info("Stopping all proxies...")
+        if not self.proxies:
+            return
+            
+        await asyncio.gather(*(p.close() for p in self.proxies), return_exceptions=True)
+        self.proxies.clear()
+        state_manager.active_proxies.clear()
+        logger.info("All proxies stopped.")
+
+    async def shutdown(self):
+        await self.stop_monitor()
+        await self.stop_all_proxies()
+        logger.info("Engine shutdown complete.")
+
+    async def start_monitor(self):
+        if self._monitor_task is None:
+            self._monitor_task = asyncio.create_task(self._monitor_loop())
+
+    async def _monitor_loop(self):
+        logger.info("Starting health monitor loop")
+        while True:
+            try:
+                for proxy in self.proxies:
+                    await self._check_proxy_health(proxy)
+                await asyncio.sleep(5)  # Poll every 5 seconds
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                logger.error(f"Error in monitor loop: {e}")
+                await asyncio.sleep(5)
+
+    async def _check_proxy_health(self, proxy: TCPProxy):
+        host = proxy.config.target_host
+        port = proxy.config.target_port
+        
+        status = "offline"
+        error_msg = None
+        
+        try:
+            _, writer = await asyncio.wait_for(
+                asyncio.open_connection(host, port),
+                timeout=2.0
+            )
+            writer.close()
+            await writer.wait_closed()
+            status = "online"
+        except Exception as e:
+            status = "offline"
+            error_msg = str(e)
+            
+        # Check if state changed
+        if proxy.config.status != status or proxy.config.error_msg != error_msg:
+            proxy.config.status = status
+            proxy.config.error_msg = error_msg
+            
+            # Broadcast update
+            event = StatusEvent(
+                local_port=proxy.config.local_port,
+                status=status,
+                error_msg=error_msg
+            )
+            state_manager.broadcast(event)
 
 engine = ProxyEngine()
