@@ -1,6 +1,7 @@
 from netmind.protocols import HamlibParser
 
 def test_hamlib_parser_standard_commands():
+    """Verifies parsing of standard Hamlib commands (freq, mode, ptt, etc)."""
     assert HamlibParser.decode(b"F 14074000") == "SET FREQ: 14074000"
     assert HamlibParser.decode(b"f") == "GET FREQ"
     assert HamlibParser.decode(b"M USB 2400") == "SET MODE: USB 2400"
@@ -11,6 +12,7 @@ def test_hamlib_parser_standard_commands():
     assert HamlibParser.decode(b"t") == "GET PTT"
 
 def test_hamlib_parser_extended_commands():
+    """Verifies parsing of extended Hamlib commands (starting with backslash)."""
     assert HamlibParser.decode(b"\\dump_state") == "DUMP STATE"
     assert HamlibParser.decode(b"\\get_powerstat") == "GET POWERSTAT"
     assert HamlibParser.decode(b"\\chk_vfo") == "CHECK VFO"
@@ -18,10 +20,12 @@ def test_hamlib_parser_extended_commands():
     assert HamlibParser.decode(b"\\get_vfo") == "GET VFO"
 
 def test_hamlib_parser_responses():
+    """Verifies parsing of Hamlib RPRT responses."""
     assert HamlibParser.decode(b"RPRT 0") == "SUCCESS"
     assert HamlibParser.decode(b"RPRT -5") == "ERROR: 5"
 
 def test_hamlib_parser_fallbacks():
+    """Verifies fallback behavior for unknown or empty data."""
     assert HamlibParser.decode(b"14074000") == "DATA: 14074000 Hz"
     assert HamlibParser.decode(b"UNKNOWN COMMAND") == "RAW: UNKNOWN COMMAND"
     assert HamlibParser.decode(b"") == "<EMPTY>"

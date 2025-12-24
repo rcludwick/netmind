@@ -8,6 +8,7 @@ from netmind.core import engine
 
 @pytest.mark.asyncio
 async def test_simple():
+    """Basic async test to verify pytest-asyncio and loop are working."""
     await asyncio.sleep(0.01)
 
 @pytest.mark.asyncio

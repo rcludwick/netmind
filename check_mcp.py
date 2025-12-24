@@ -1,3 +1,9 @@
+"""
+Utility script to check for MCP client dependencies.
+
+This script imports `mcp.client.sse` to verify if the MCP client libraries
+are installed and accessible in the current environment.
+"""
 
 try:
     import mcp.client.sse

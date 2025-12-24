@@ -4,6 +4,9 @@ from netmind.core import engine, state_manager, StatusEvent
 
 @pytest.mark.asyncio
 async def test_health_check_logic(echo_server):
+    """
+    Verifies that the health check logic correctly identifies online/offline proxies.
+    """
     # 1. Start a proxy pointing to a valid echo server
     proxy_port = 9100
     await engine.add_proxy(

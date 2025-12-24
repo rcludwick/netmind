@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 from netmind.app import main
 
 def test_main_arg_parsing():
+    """Verifies that command line arguments are correctly parsed and passed to uvicorn."""
     # Mock uvicorn.run to prevent server start
     with patch("uvicorn.run") as mock_run:
         # Mock sys.argv
@@ -36,6 +37,7 @@ def test_main_arg_parsing():
             assert proxies[0]["target_port"] == "80"
 
 def test_main_no_proxy_args():
+    """Verifies default behavior when no proxy arguments are provided."""
     with patch("uvicorn.run") as mock_run:
         test_args = ["netmind-server"]
         with patch.object(sys, "argv", test_args):

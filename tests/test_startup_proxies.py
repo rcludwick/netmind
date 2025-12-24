@@ -8,6 +8,7 @@ from netmind.app import lifespan
 
 @pytest.mark.asyncio
 async def test_lifespan_starts_proxies():
+    """Verifies that proxies defined in env vars are started on app startup."""
     # Setup env
     proxies = [
         {"name": "EnvProxy", "local_port": "9999", "target_host": "example.com", "target_port": "80"}

@@ -6,6 +6,9 @@ from netmind.core import engine
 
 @pytest.mark.asyncio
 async def test_proxy_lifecycle(echo_server):
+    """
+    Verifies the full lifecycle of a proxy: creation, verification, and removal.
+    """
     transport = ASGITransport(app=app)
     async with AsyncClient(transport=transport, base_url="http://test") as ac:
         
