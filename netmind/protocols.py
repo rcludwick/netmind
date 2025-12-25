@@ -17,19 +17,20 @@ class HamlibParser:
     
     # Regex patterns for common Hamlib commands
     PATTERNS = [
-        (r"^F\s+(\d+)", "SET FREQ"),
-        (r"^f", "GET FREQ"),
-        (r"^M\s+(\w+)\s+(\d+)", "SET MODE"),
-        (r"^m", "GET MODE"),
-        (r"^L\s+(\w+)\s+([\d\.]+)", "SET LEVEL"),
-        (r"^l\s+(\w+)", "GET LEVEL"),
-        (r"^T\s+([01])", "SET PTT"),
-        (r"^t", "GET PTT"),
-        (r"^\\dump_state", "DUMP STATE"),
-        (r"^\\get_powerstat", "GET POWERSTAT"),
-        (r"^\\chk_vfo", "CHECK VFO"),
-        (r"^\\set_vfo\s+(\w+)", "SET VFO"),
-        (r"^\\get_vfo", "GET VFO"),
+        (r"^\+?F\s+(\d+)", "SET FREQ"),
+        (r"^\+?f", "GET FREQ"),
+        (r"^\+?M\s+(\w+)\s+(\d+)", "SET MODE"),
+        (r"^\+?m", "GET MODE"),
+        (r"^\+?L\s+(\w+)\s+([\d\.]+)", "SET LEVEL"),
+        (r"^\+?l\s+(\w+)", "GET LEVEL"),
+        (r"^\+?T\s+([01])", "SET PTT"),
+        (r"^\+?t", "GET PTT"),
+        (r"^\+?\\dump_state", "DUMP STATE"),
+        (r"^\+?\\dump_caps", "DUMP CAPS"),
+        (r"^\+?\\get_powerstat", "GET POWERSTAT"),
+        (r"^\+?\\chk_vfo", "CHECK VFO"),
+        (r"^\+?\\set_vfo\s+(\w+)", "SET VFO"),
+        (r"^\+?\\get_vfo", "GET VFO"),
         (r"^RPRT\s+0", "SUCCESS"),
         (r"^RPRT\s+-(\d+)", "ERROR")
     ]
